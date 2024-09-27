@@ -4,19 +4,20 @@ This repository contains scenarios and parser test functions for different Pytho
 based multipart/form-data parsers, both for blocking and non-blocking APIs (if
 available).
 
-Contestants:
+## Contestants
 
-* [multipart](https://pypi.org/project/multipart/) 1.0.0
-  * Will be used in [Bottle](https://pypi.org/project/bottle/)
-* [werkzeug](https://pypi.org/project/Werkzeug/) 3.0.4
-  * Used by [Flask](https://pypi.org/project/Flask/) and many others.
-* [python-multipart](https://pypi.org/project/python-multipart/) 0.0.10
+* [multipart](https://pypi.org/project/multipart/) v1.0.0
+  * Will be used in [Bottle](https://pypi.org/project/bottle/). Disclaimer: I am the author of both *multipart* and *Bottle*.
+* [werkzeug](https://pypi.org/project/Werkzeug/) v3.0.4
+  * Used by [Flask](https://pypi.org/project/Flask/) and others.
+* [python-multipart](https://pypi.org/project/python-multipart/) v0.0.10
   * Used by [Starlette](https://pypi.org/project/starlette/) and thus [FastAPI](https://pypi.org/project/fastapi/)
 * [cgi](https://docs.python.org/3.12/library/cgi.html) CPython 3.12.3
   * Deprecated and will be removed in Python 3.13
 * [email](https://docs.python.org/3.12/library/email.parser.html#email.message_from_binary_file) CPython 3.12.3
-  * Not a `multipart/form-data` parser, but a general purpose `multipart` parser for emails. May be risky to use for
-    public facing web services.
+  * Not a specialized `multipart/form-data` parser, but a general purpose parser for emails.
+
+
 
 
 ## Results
@@ -63,7 +64,7 @@ A large form with 100 small text fields.
 Again, `email` shines when parsing lots of simple text fields. No idea how these
 numbers are even possible. Better view these results with a grain of salt.
 
-== Scenario: upload
+### Scenario: upload
 
 A file upload with a single large (32MB) file.
 
