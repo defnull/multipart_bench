@@ -152,11 +152,11 @@ A 1MB upload that contains parts of the boundary.
 Most parsers are unaffected by this special scenario, because they search for
 the whole boundary and do not care about partial matches. With two exceptions:
 `cgi` benefits from an input that does not contain any newlines and is faster
-than usual, and `python-multipart` tanks completely. I'm not sure why, but as
-soon as the upload body consists mainly of characters that are also present in
-the boundary, which is not unlikely, throughput is way worse. This was also
-reported to the maintainers and the benchmark will be corrected once the issue
-is fixed. 
+than usual, and `python-multipart` is seriously slowed down. I'm not sure why,
+but as soon as the upload body consists mainly of characters that are also
+present in the boundary, which is not unlikely, throughput is way worse. This
+was also reported to the maintainers and the benchmark will be corrected once
+the issue is fixed. 
 
 ## Conclusions:
 
