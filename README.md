@@ -102,11 +102,11 @@ A file upload with a single large (32MB) file.
 | cgi              | 131.17 MB/s (9%)    | -                     |
 | email            | 51.80 MB/s (3%)     | 59.98 MB/s (1%)       |
 
-Now it gets interesting. When dealing with actual file uploads, `multipart` is
-the clear winner with `python-multipart` as a close second. `werkzeug` also
-performs pretty well compared to the line-based `cgi` and `email` parsers. Both
-struggle a lot, probably because there are line-breaks in the input. This can
-get even worse, though. See below.
+Now it gets interesting. When dealing with actual file uploads, `python-multipart`
+catches up and is now better than `werkzeug`. Both are still slower than
+`multipart`, but not by much. The line-based `cgi` and `email` parsers on the
+other hand struggle a lot, probably because there are line-breaks in the test
+file. This flaw shows even more in some of the tests below.
 
 ### Scenario: mixed
 
@@ -122,8 +122,8 @@ A form with two text fields and two small file uploads (1MB and 2MB).
 
 This is the most realistic test and shows very similar results to the upload
 test above. As soon as an actual file upload is involved, `multipart` and
-`python-multipart` outperform the others. `werkzeug` is significantly slower,
-but still way better than the line-based `cgi` and `email` parsers.
+`python-multipart` outperform the others. `werkzeug` is a bit slower,
+but still way faster than the line-based `cgi` and `email` parsers.
 
 ### Scenario: worstcase_crlf
 
@@ -137,15 +137,15 @@ A 1MB upload that contains nothing but windows line-breaks.
 | cgi              | 3.75 MB/s (0%)      | -                     |
 | email            | 4.25 MB/s (0%)      | 4.27 MB/s (0%)        |
 
-This is the first worst-case scenario, which should not happen under normal
-circumstances but is still an important factor if you want to prevent malicious
-uploads from slowing down your web service. Both `multipart` and `werkzeug` are
+This is the first scenario that should not happen under normal circumstances
+but is still an important factor if you want to prevent malicious uploads from
+slowing down your web service. Both `multipart` and `werkzeug` are
 unaffected and produce consistent results. `python-multipart` slows down, but
 still performs well. The line-based parsers however are practically unusable.
 
-Update **30.09.2024** python-multipart v0.0.11 fixed this edge-cases and no
-longer chokes on this scenario. It previously showed down to 0.75 MB/s or less
-on this test, even slower than `cgi` or `email`.
+Update **30.09.2024** python-multipart v0.0.11 fixed an edge-cases and no longer
+chokes on this scenario. It previously showed down to 0.75 MB/s or less on this
+test, even slower than `cgi` or `email`.
 
 ### Scenario: worstcase_lf
 
@@ -163,9 +163,8 @@ Similar results compared to the windows line-break test above, but `cgi` and
 `email` are even worse this time. Throughput is roughly halved, probably because
 there are twice as many line breaks (and thus lines) in this scenario. 
 
-Update **30.09.2024** python-multipart v0.0.11 fixed this edge-cases and no
-longer chokes on this scenario. It previously showed down to 0.75 MB/s or less
-on this test, even slower than `cgi` or `email`.
+Update **30.09.2024** python-multipart v0.0.11 fixed an edge-cases and no longer
+chokes on this scenario. It previously showed down to 2.01 MB/s on this test.
 
 ### Scenario: worstcase_bchar
 
@@ -185,9 +184,9 @@ does not contain any newlines, `cgi` is suddenly competitive again. Its internal
 `file.readline(1<<16)` call can read large chunks at a time and the parser logic
 runs less often.
 
-Update **30.09.2024** python-multipart v0.0.11 fixed this edge-cases and no
-longer chokes on this scenario. It previously showed down to 0.75 MB/s or less
-on this test, even slower than `cgi` or `email`.
+Update **30.09.2024** python-multipart v0.0.11 fixed an edge-cases and no longer
+chokes on this scenario. It previously showed down to less than 50 MB/s on this
+test, even slower than `cgi` or `email`.
 
 ## Conclusions:
 
