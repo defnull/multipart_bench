@@ -15,17 +15,30 @@ if __name__ == "__main__":
 
         head = ["Parser", "Blocking (MB/s)", "Non-Blocking (MB/s)"]
         rows = []
-
-        for name, [blocking, non_blocking] in parser_table.items():
+        best = 0
+        for name, variants in parser_table.items():
             row = [name]
-            result = scenario.timeit(blocking, **bench_args)
-            row += [f"{result.throughput / 1024 / 1024:.2f} MB/s"]
-            if non_blocking:
-                result = scenario.timeit(non_blocking, **bench_args)
-                row += [f"{result.throughput / 1024 / 1024:.2f} MB/s"]
-            else:
-                row += ["-"]
+            for variant in variants:
+                if not variant:
+                    row.append(-1)
+                else:
+                    result = scenario.timeit(variant, **bench_args)
+                    row += [result.throughput]
+                    best = max(best, result.throughput)
             rows.append(row)
+
+        def format(field, best):
+            if field < 0:
+                return "-"
+            if field == best:
+                return f"{field / 1024 / 1024:.2f} MB/s (100%)"
+            return f"{field / 1024 / 1024:.2f} MB/s ({field / (best/100):>.0f}%)"
+
+        best_blocking = max(row[1] for row in rows)
+        best_async    = max(row[2] for row in rows)
+        for row in rows:
+            row[1] = format(row[1], best_blocking)
+            row[2] = format(row[2], best_async)
 
         print(tabulate(rows, headers=head, tablefmt="github"))
         print()

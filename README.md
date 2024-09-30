@@ -6,35 +6,47 @@ available).
 
 ## Contestants
 
-* [multipart](https://pypi.org/project/multipart/) v1.0.0
+* [multipart](https://pypi.org/project/multipart/) v1.0.1
   * Will be used in [Bottle](https://pypi.org/project/bottle/). Disclaimer: I am the author of both *multipart* and *Bottle*.
 * [werkzeug](https://pypi.org/project/Werkzeug/) v3.0.4
   * Used by [Flask](https://pypi.org/project/Flask/) and others.
-* [python-multipart](https://pypi.org/project/python-multipart/) v0.0.10
+* [python-multipart](https://pypi.org/project/python-multipart/) v0.0.12
   * Used by [Starlette](https://pypi.org/project/starlette/) and thus [FastAPI](https://pypi.org/project/fastapi/)
 * [cgi](https://docs.python.org/3.12/library/cgi.html) CPython 3.12.3
   * Deprecated and will be removed in Python 3.13
 * [email](https://docs.python.org/3.12/library/email.parser.html#email.message_from_binary_file) CPython 3.12.3
+  * Buffers everything in memory and is unsuitable for large file uploads.
   * Not a specialized `multipart/form-data` parser, but a general purpose parser for emails.
 
+## Updates
 
+* **30.09.2024** python-multipart v0.0.11 fixed some of the edge-cases and now
+  has better throughput in some tests, especially in the worst-case scenarios.
+* **30.09.2024** There was an issue with the `email` parser that caused it to
+  skip over the actual parsing and also not do any IO in the blocking test.
+  Throughput was way higher than expected. This is fixed now.
+* **30.09.2024** Default size for in-memory buffers is different for each parser,
+  resulting in an unfair comparison. The tests now configure a limit of 500K for
+  each parser, which is the hard-coded value in werkzeug and also a sensible
+  default.
 
+## Method
+
+All tests were performed on a pretty old "AMD Ryzen 5 3600" running Linux 6.8.0
+and Python 3.12.3 with highest possible priority and pinned to a single core.
+
+For each test, the parser is created with default¹ settings and the results are
+thrown away. Some parsers buffer to disk, but `TEMP` points to a ram-disk to
+reduce disk IO from the equation. Each test was repeated at least 100 times or
+60 seconds and only the best result is used to compute a theoretical maximum
+parser throughput per core.
+
+¹) There is one exception: The limit for in-memory buffered files is set to
+500KB (hard-coded in werkzeug) to ensure a fair comparison.
 
 ## Results
 
-The results shown here were computed on a pretty old "AMD Ryzen 5 3600" running
-Linux 6.8.0 and Python 3.12.3 with highest priority and pinned to a single core.
-For each test, the parser is created with default¹ settings and the results are
-thrown away. Some parsers buffer to disk, but `TEMP` points to a ram-disk to
-remove any disk IO from the equation. Each test was repeated at least 100 times
-or 60 seconds and only the best result is used to compute a theoretical maximum
-parser throughput per core.
-
 Higher throughput is better, obviously.
-
-¹) All parsers are configured with default setting with one exception: The limit
-for in-memory buffered files is the same for each test, because different
-values would screw with results and make the benchmark unfair.
 
 ### Scenario: simple
 
@@ -42,16 +54,20 @@ A simple form with just two small text fields.
 
 | Parser           | Blocking (MB/s)   | Non-Blocking (MB/s)   |
 |------------------|-------------------|-----------------------|
-| multipart        | 6.53 MB/s         | 11.74 MB/s            |
-| werkzeug         | 5.14 MB/s         | 6.20 MB/s             |
-| python-multipart | 2.04 MB/s         | 2.64 MB/s             |
-| cgi              | 4.34 MB/s         | -                     |
-| email            | 11.20 MB/s        | -                     |
+| multipart        | 10.57 MB/s (100%) | 14.09 MB/s (100%)     |
+| werkzeug         | 5.05 MB/s (48%)   | 6.13 MB/s (43%)       |
+| python-multipart | 3.45 MB/s (33%)   | 5.68 MB/s (40%)       |
+| cgi              | 4.30 MB/s (41%)   | -                     |
+| email            | 3.58 MB/s (34%)   | 3.89 MB/s (28%)       |
 
-The `email` parser is surprisingly fast for small text fields, but will have more
-problems later when larger file uploads are involved. Small forms like these should
-be transmitted as `application/x-www-form-urlencoded` anyway, which has a lot less
-overhead compared to `multipart/form-data`.
+This scenario is so small that it shows initialization overhead more than actual
+parsing performance. Small forms like these should better be transmitted as
+`application/x-www-form-urlencoded`, which has a lot less overhead compared to
+`multipart/form-data` and should be a lot faster.
+
+Update **30.09.2024**: The `email` parser was surprisingly fast for small text
+fields. This turned out to be a bug in the test code. The results now are more
+realistic.
 
 ### Scenario: large
 
@@ -59,121 +75,137 @@ A large form with 100 small text fields.
 
 | Parser           | Blocking (MB/s)   | Non-Blocking (MB/s)   |
 |------------------|-------------------|-----------------------|
-| multipart        | 11.36 MB/s        | 22.54 MB/s            |
-| werkzeug         | 10.38 MB/s        | 13.17 MB/s            |
-| python-multipart | 2.42 MB/s         | 3.05 MB/s             |
-| cgi              | 6.52 MB/s         | -                     |
-| email            | 94.33 MB/s        | -                     |
+| multipart        | 24.30 MB/s (100%) | 30.67 MB/s (100%)     |
+| werkzeug         | 10.19 MB/s (42%)  | 12.71 MB/s (41%)      |
+| python-multipart | 5.04 MB/s (21%)   | 8.95 MB/s (29%)       |
+| cgi              | 6.36 MB/s (26%)   | -                     |
+| email            | 11.17 MB/s (46%)  | 12.88 MB/s (42%)      |
 
-Again, `email` shines when parsing lots of simple text fields. No idea how these
-numbers are even possible. Better view these results with a grain of salt.
+Large forms show a slightly higher throughput because initialization overhead
+is no longer the main factor. `email` is designed for this type of line based
+text input, but `multipart` is still faster.
+
+Update **30.09.2024**: The `email` parser was surprisingly fast for small text
+fields. This turned out to be a bug in the test code. The results now are more
+realistic.
+
 
 ### Scenario: upload
 
 A file upload with a single large (32MB) file.
 
-| Parser           | Blocking (MB/s)   | Non-Blocking (MB/s)   |
-|------------------|-------------------|-----------------------|
-| multipart        | 1150.00 MB/s      | 6015.66 MB/s          |
-| werkzeug         | 895.60 MB/s       | 2631.91 MB/s          |
-| python-multipart | 430.46 MB/s       | 600.15 MB/s           |
-| cgi              | 130.00 MB/s       | -                     |
-| email            | 111.47 MB/s       | -                     |
+| Parser           | Blocking (MB/s)     | Non-Blocking (MB/s)   |
+|------------------|---------------------|-----------------------|
+| multipart        | 1498.41 MB/s (100%) | 6094.32 MB/s (100%)   |
+| werkzeug         | 912.74 MB/s (61%)   | 2643.83 MB/s (43%)    |
+| python-multipart | 1386.15 MB/s (93%)  | 4624.38 MB/s (76%)    |
+| cgi              | 131.17 MB/s (9%)    | -                     |
+| email            | 51.80 MB/s (3%)     | 59.98 MB/s (1%)       |
 
-Now we are talking. When dealing with actual file uploads, `multipart` is the
-clear winner and `werkzeug` also performs really well. Note that some parsers
-may show different results with specifically crafted file content. See the
-worst-case scenarios further down below. In this test, the file consists of 
-`string.printable` characters.
+Now it gets interesting. When dealing with actual file uploads, `multipart` is
+the clear winner with `python-multipart` as a close second. `werkzeug` also
+performs pretty well compared to the line-based `cgi` and `email` parsers. Both
+struggle a lot, probably because there are line-breaks in the input. This can
+get even worse, though. See below.
 
 ### Scenario: mixed
 
 A form with two text fields and two small file uploads (1MB and 2MB).
 
-| Parser           | Blocking (MB/s)   | Non-Blocking (MB/s)   |
-|------------------|-------------------|-----------------------|
-| multipart        | 1217.45 MB/s      | 6869.47 MB/s          |
-| werkzeug         | 936.99 MB/s       | 2673.46 MB/s          |
-| python-multipart | 453.49 MB/s       | 587.44 MB/s           |
-| cgi              | 132.04 MB/s       | -                     |
-| email            | 137.90 MB/s       | -                     |
+| Parser           | Blocking (MB/s)     | Non-Blocking (MB/s)   |
+|------------------|---------------------|-----------------------|
+| multipart        | 1445.70 MB/s (100%) | 6906.77 MB/s (100%)   |
+| werkzeug         | 939.68 MB/s (65%)   | 2678.41 MB/s (39%)    |
+| python-multipart | 1198.17 MB/s (83%)  | 4675.59 MB/s (68%)    |
+| cgi              | 130.80 MB/s (9%)    | -                     |
+| email            | 65.51 MB/s (5%)     | 69.36 MB/s (1%)       |
 
 This is the most realistic test and shows very similar results to the upload
 test above. As soon as an actual file upload is involved, `multipart` and
-`werkzeug` outperform the others.
+`python-multipart` outperform the others. `werkzeug` is significantly slower,
+but still way better than the line-based `cgi` and `email` parsers.
 
 ### Scenario: worstcase_crlf
 
 A 1MB upload that contains nothing but windows line-breaks.
 
-| Parser           | Blocking (MB/s)   | Non-Blocking (MB/s)   |
-|------------------|-------------------|-----------------------|
-| multipart        | 1216.12 MB/s      | 6504.70 MB/s          |
-| werkzeug         | 1056.70 MB/s      | 3904.44 MB/s          |
-| python-multipart | 0.67 MB/s         | 0.75 MB/s             |
-| cgi              | 3.78 MB/s         | -                     |
-| email            | 8.03 MB/s         | -                     |
+| Parser           | Blocking (MB/s)     | Non-Blocking (MB/s)   |
+|------------------|---------------------|-----------------------|
+| multipart        | 1487.82 MB/s (100%) | 6538.67 MB/s (100%)   |
+| werkzeug         | 1052.91 MB/s (71%)  | 3927.89 MB/s (60%)    |
+| python-multipart | 726.70 MB/s (49%)   | 1348.81 MB/s (21%)    |
+| cgi              | 3.75 MB/s (0%)      | -                     |
+| email            | 4.25 MB/s (0%)      | 4.27 MB/s (0%)        |
 
 This is the first worst-case scenario, which should not happen under normal
 circumstances but is still an important factor if you want to prevent malicious
 uploads from slowing down your web service. Both `multipart` and `werkzeug` are
-unaffected and produce consistent results, but all parsers that consume input
-line-by-line slow down to a crawl. `python-multipart` is special here, because
-it is not actually line-based like `email` or `cgi`, but still suffers greatly
-from this kind of input. The issue is already reported and will hopefully be 
-fixed in a future version of the parser.
+unaffected and produce consistent results. `python-multipart` slows down, but
+still performs well. The line-based parsers however are practically unusable.
+
+Update **30.09.2024** python-multipart v0.0.11 fixed this edge-cases and no
+longer chokes on this scenario. It previously showed down to 0.75 MB/s or less
+on this test, even slower than `cgi` or `email`.
 
 ### Scenario: worstcase_lf
 
 A 1MB upload that contains nothing but linux line-breaks.
 
-| Parser           | Blocking (MB/s)   | Non-Blocking (MB/s)   |
-|------------------|-------------------|-----------------------|
-| multipart        | 1214.42 MB/s      | 6484.41 MB/s          |
-| werkzeug         | 1028.76 MB/s      | 3574.04 MB/s          |
-| python-multipart | 2.01 MB/s         | 2.01 MB/s             |
-| cgi              | 1.69 MB/s         | -                     |
-| email            | 3.94 MB/s         | -                     |
+| Parser           | Blocking (MB/s)     | Non-Blocking (MB/s)   |
+|------------------|---------------------|-----------------------|
+| multipart        | 1496.03 MB/s (100%) | 6594.33 MB/s (100%)   |
+| werkzeug         | 1024.30 MB/s (68%)  | 3608.61 MB/s (55%)    |
+| python-multipart | 1259.46 MB/s (84%)  | 4654.28 MB/s (71%)    |
+| cgi              | 1.70 MB/s (0%)      | -                     |
+| email            | 2.55 MB/s (0%)      | 2.57 MB/s (0%)        |
 
-For reasons only the developers may know, `python-multipart` performs slightly
-better than with CRLF line-breaks but still way worse than expected. Both `cgi`
-and `email` are even worse than before, probably because we have twice as many
-line breaks (and thus lines) in this scenario. Throughput is roughly halved.
-Both `multipart` and `werkzeug` are stable and fast.
+Similar results compared to the windows line-break test above, but `cgi` and
+`email` are even worse this time. Throughput is roughly halved, probably because
+there are twice as many line breaks (and thus lines) in this scenario. 
+
+Update **30.09.2024** python-multipart v0.0.11 fixed this edge-cases and no
+longer chokes on this scenario. It previously showed down to 0.75 MB/s or less
+on this test, even slower than `cgi` or `email`.
 
 ### Scenario: worstcase_bchar
 
 A 1MB upload that contains parts of the boundary.
 
-| Parser           | Blocking (MB/s)   | Non-Blocking (MB/s)   |
-|------------------|-------------------|-----------------------|
-| multipart        | 1175.73 MB/s      | 5631.51 MB/s          |
-| werkzeug         | 1006.72 MB/s      | 3434.27 MB/s          |
-| python-multipart | 46.72 MB/s        | 47.93 MB/s            |
-| cgi              | 1425.05 MB/s      | -                     |
-| email            | 624.73 MB/s       | -                     |
+| Parser           | Blocking (MB/s)     | Non-Blocking (MB/s)   |
+|------------------|---------------------|-----------------------|
+| multipart        | 1463.16 MB/s (100%) | 5794.98 MB/s (100%)   |
+| werkzeug         | 1012.12 MB/s (69%)  | 3497.55 MB/s (60%)    |
+| python-multipart | 1230.30 MB/s (84%)  | 4242.27 MB/s (73%)    |
+| cgi              | 1433.57 MB/s (98%)  | -                     |
+| email            | 144.75 MB/s (10%)   | 163.05 MB/s (3%)      |
 
-Most parsers are unaffected by this special scenario, because they search for
-the whole boundary and do not care about partial matches. With two exceptions:
-`cgi` benefits from an input that does not contain any newlines and is faster
-than usual, and `python-multipart` is seriously slowed down. I'm not sure why,
-but as soon as the upload body consists mainly of characters that are also
-present in the boundary, which is not unlikely, throughput is way worse. This
-was also reported to the maintainers and the benchmark will be corrected once
-the issue is fixed. 
+This test was originally added to show a second issue with the `python-multipart`
+parser, but that's fixed now. There is another anomaly, though: Since the file
+does not contain any newlines, `cgi` is suddenly competitive again. Its internal
+`file.readline(1<<16)` call can read large chunks at a time and the parser logic
+runs less often.
+
+Update **30.09.2024** python-multipart v0.0.11 fixed this edge-cases and no
+longer chokes on this scenario. It previously showed down to 0.75 MB/s or less
+on this test, even slower than `cgi` or `email`.
 
 ## Conclusions:
 
-* Both `multipart` and `werkzeug` are fast and stable. Both offer non-blocking
-  parsers for asnycio/ASGI environments that have very little overhead.
-* Both `email` and `cgi` are surprisingly fast in certain scenarios (small text
-  fields and ASCII input without any newlines), but very slow in others. Both
-  rely on blocking APIs, which makes them simpler, but also unsuitable for
-  asyncio/ASGI environments. And the most pressing issues: `cgi` is deprecated 
-  and will be removed from python, and `email` is not designed for
-  `multipart/form-data` and accepts input a form parser should not accept. Web
-  applications or frameworks should not rely on those.
-* The `python-multipart` parser is slower than expected, and has some serious
-  issues with certain inputs. It also needs special care if used in projects
-  that also (maybe indirectly) depend on `multipart` because of a module name
-  conflict. In it's current state I would not recommend it. 
+All three modern parsers (`multipart`, `werkzeug` and `python-multipart`) are
+fast and behave correctly. All three offer non-blocking APIs for asnycio/ASGI
+environments with very little overhead and a high level of control. There are
+differences in API design, code quality, maturity and documentation, but that's
+not the focus of this test suite.
+
+Some aspects should still be mentioned. For example the
+[naming conflict](https://github.com/twisted/treq/issues/399) caused by
+`python-multipart`, or the fact that `python-multipart` is mostly undocumented
+and may be [merged into starlette and abandoned](https://github.com/Kludex/python-multipart/issues/16)
+in the future. This makes it hard to recommend it to anyone, and I really hope
+the naming conflict gets resolved, one way ot the other.
+
+I probably do not need to talk much about `email` or `cgi`. Both perform very
+poorly and are vulnerable to malicious inputs. `cgi` is deprecated (for good
+reasons) and `email` is not designed for `multipart/form-data` or large uploads
+at all, rendering both useless or even dangerous for web applications.
+

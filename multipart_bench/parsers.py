@@ -1,3 +1,4 @@
+from tempfile import SpooledTemporaryFile
 from .scenarios import Scenario
 
 PARSERS = []
@@ -151,18 +152,34 @@ try:
 except ImportError:
     stdlib_cgi_blocking = None
 
-import email
+import email.parser
 
+@add_parser
+def stdlib_email_sansio(scenario: Scenario):
+    parser = email.parser.BytesFeedParser()
+    parser.feed(b"MIME-Version: 1.0\r\n" + b"Content-Type: multipart/form-data; boundary=" + scenario.boundary + b"\r\n")
+    read = scenario.payload.read
+    chunksize = scenario.chunksize
+    while data := read(chunksize):
+        parser.feed(data)
+    return parser.close().get_payload()
+
+# Payload is always memory-buffered, which makes this parser unsuitable for 
+# large file uploads and unsafe to use in a web application. To get comparable
+# results for a blocking version, we assume that someone subclasses Message
+# in a way that buffers to disk.
 
 @add_parser
 def stdlib_email_blocking(scenario: Scenario):
-    email.message_from_binary_file(scenario.payload)
-
+    for part in stdlib_email_sansio(scenario):
+        target = SpooledTemporaryFile(max_size=SPOOL_LIMIT)
+        target.write(part.get_payload().encode("utf8"))
+        target.close()
 
 parser_table = {
     "multipart": [multipart_blocking, multipart_sansio],
     "werkzeug": [werkzeug_blocking, werkzeug_sansio],
     "python-multipart": [python_multipart_blocking, python_multipart_sansio],
     "cgi": [stdlib_cgi_blocking, None],
-    "email": [stdlib_email_blocking, None],
+    "email": [stdlib_email_blocking, stdlib_email_sansio],
 }
