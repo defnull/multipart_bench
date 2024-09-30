@@ -1,7 +1,9 @@
 from .scenarios import Scenario
 
 PARSERS = []
-
+# Size limit for memory-buffered files is hard-coded in werkzeug, so we
+# set it to other parsers to be fair.
+SPOOL_LIMIT = 1024*500
 
 def add_parser(func):
     PARSERS.append(func)
@@ -34,6 +36,7 @@ try:
                 scenario.payload,
                 boundary=scenario.boundary,
                 buffer_size=scenario.chunksize,
+                spool_limit=SPOOL_LIMIT,
             )
         )
 
@@ -114,7 +117,7 @@ try:
             on_file,
             on_end,
             boundary=scenario.boundary,
-            config={},
+            config={"MAX_MEMORY_FILE_SIZE": SPOOL_LIMIT},
         )
         read = scenario.payload.read
 

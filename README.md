@@ -24,13 +24,17 @@ available).
 
 The results shown here were computed on a pretty old "AMD Ryzen 5 3600" running
 Linux 6.8.0 and Python 3.12.3 with highest priority and pinned to a single core.
-For each test, the parser is created with default settings and the results are
+For each test, the parser is created with default¹ settings and the results are
 thrown away. Some parsers buffer to disk, but `TEMP` points to a ram-disk to
 remove any disk IO from the equation. Each test was repeated at least 100 times
 or 60 seconds and only the best result is used to compute a theoretical maximum
 parser throughput per core.
 
 Higher throughput is better, obviously.
+
+¹) All parsers are configured with default setting with one exception: The limit
+for in-memory buffered files is the same for each test, because different
+values would screw with results and make the benchmark unfair.
 
 ### Scenario: simple
 
