@@ -2,9 +2,23 @@ from multipart_bench.scenarios import SCENARIOS
 from multipart_bench.parsers import parser_table
 from tabulate import tabulate
 import sys
+import cProfile
+import time
+
+
+def profile(scenario, parser):
+    pr = cProfile.Profile(timer=time.perf_counter)
+    scenario.reset()
+    parser(scenario) # warmup
+    scenario.reset()
+    pr.enable()
+    parser(scenario)
+    pr.disable()
+    pr.dump_stats(f"profiles/{scenario.name}-{parser.__name__}.prof")
+
 
 if __name__ == "__main__":
-    bench_args = dict(mintime=60, minrepeat=100, confidence=20)
+    bench_args = dict(mintime=10, minrepeat=100, confidence=100)
 
     for scenario in SCENARIOS:
         if sys.argv[1:] and scenario.name not in sys.argv[1:]:
@@ -21,10 +35,17 @@ if __name__ == "__main__":
             for variant in variants:
                 if not variant:
                     row.append(-1)
-                else:
-                    result = scenario.timeit(variant, **bench_args)
-                    row += [result.throughput]
-                    best = max(best, result.throughput)
+                    continue
+                # Create profile
+                profile(scenario, variant)
+                # Tune n so each run takes roughly 10ms
+                baseline = scenario.run_bench(variant)
+                n = int(max(1, min(100, .01 // baseline)))
+                # Run actual benchmark
+                result = scenario.timeit(variant, n=n, **bench_args)
+                row += [result.throughput]
+                best = max(best, result.throughput)
+                print(scenario.name, variant.__name__ if variant else None, result.min, n, len(result.results))
             rows.append(row)
 
         def format(field, best):

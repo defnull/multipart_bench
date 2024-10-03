@@ -66,12 +66,12 @@ class Scenario:
 
     def reset(self):
         self.payload.seek(0)
+        return self
 
-    def run_once(self, func):
-        self.reset()
-        return timeit.timeit(lambda: func(self), "pass", number=1)
+    def run_bench(self, func, n=1):
+        return timeit.timeit(lambda: func(self.reset()), "pass", number=n) / n
 
-    def timeit(self, func, mintime=10, minrepeat=5, confidence=5):
+    def timeit(self, func, n=1, mintime=10, minrepeat=5, confidence=5):
         """Benchmark a single function that takes a scenario.
 
         :param func: Function to test.
@@ -88,7 +88,7 @@ class Scenario:
             or len(results) < minrepeat
             or loose_count < confidence
         ):
-            r = self.run_once(func)
+            r = self.run_bench(func, n)
             results.append(r)
             if r < best:
                 best = r
@@ -164,19 +164,16 @@ def simple(payload):
     payload.field("email").pattern(string.printable, 24)
     payload.field("password").pattern(string.printable, 16)
 
-
 @add_scenario
 def large(payload):
     "A large form with 100 small text fields"
     for i in range(100):
         payload.field(f"field{i}").pattern(string.printable, i)
 
-
 @add_scenario
 def upload(payload):
     "A file upload with a single large (32MB) file"
     payload.field("foo", "bar.bin").pattern(string.printable, 1024 * 1024 * 32)
-
 
 @add_scenario
 def mixed(payload):
@@ -186,18 +183,15 @@ def mixed(payload):
     payload.field("field2").pattern(string.printable, 32)
     payload.field("file2", "file2.bin").pattern(string.printable, 1024 * 1024 * 2)
 
-
 @add_scenario
 def worstcase_crlf(payload):
     "A 1MB upload that contains nothing but windows line-breaks"
     payload.field("file", "file.bin").pattern("\r\n", 1024 * 1024)
 
-
 @add_scenario
 def worstcase_lf(payload):
     "A 1MB upload that contains nothing but linux line-breaks"
     payload.field("file", "file.bin").pattern("\n", 1024 * 1024)
-
 
 @add_scenario
 def worstcase_bchar(payload):
