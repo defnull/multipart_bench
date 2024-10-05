@@ -1,7 +1,7 @@
 # Benchmark for Python multipart/form-data parsers
 
-This repository contains scenarios and parser test functions for different Python
-based multipart/form-data parsers, both for blocking and non-blocking APIs (if
+This repository contains scenarios and parser tests for different Python based
+`multipart/form-data` parsers, comparing both blocking and non-blocking APIs (if
 available).
 
 ## Contestants
