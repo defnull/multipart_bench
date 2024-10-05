@@ -204,17 +204,11 @@ All three modern parsers (`multipart`, `werkzeug` and `python-multipart`) are
 fast and behave correctly. All three offer non-blocking APIs for asnycio/ASGI
 environments with very little overhead and a high level of control. There are
 differences in API design, code quality, maturity and documentation, but that's
-not the focus of this test suite.
+not the focus of this benchmark.
 
-Some non-performance aspects should still be mentioned, though. For example the
-[naming conflict](https://github.com/twisted/treq/issues/399) caused by
-`python-multipart`, or the fact that `python-multipart` is mostly undocumented
-and may be [merged into starlette and abandoned](https://github.com/Kludex/python-multipart/issues/16)
-in the future. These aspects should be considered before choosing it as a
-dependency. I really hope the naming conflict gets resolved, one way or the other.
-
-I probably do not need to talk much about `email` or `cgi`. Both perform very
-poorly and are vulnerable to malicious inputs. `cgi` is deprecated (for good
-reasons) and `email` is not designed for `multipart/form-data` or large uploads
-at all, rendering both useless or even dangerous for web applications.
+I probably do not need to talk much about `email` or `cgi`. Both show mixed
+performance and are vulnerable to malicious inputs. `cgi` is deprecated (for
+good reasons) and `email` is not designed for `multipart/form-data` or large
+uploads at all. Both are unsuitable or even dangerous to use in modern web
+applications.
 
