@@ -25,17 +25,17 @@ available).
 
 ## Updates
 
-* **30.09.2024** python-multipart v0.0.11 fixed a bug that caused extreme
+* **30.09.2024** `python-multipart` v0.0.11 fixed a bug that caused extreme
   slowdowns (as low as 0.75MB/s) in all three worst-case scenarios.
 * **30.09.2024** There was an issue with the `email` parser that caused it to
   skip over the actual parsing and also not do any IO in the blocking test.
   Throughput was way higher than expected. This is fixed now.
 * **30.09.2024** Default size for in-memory buffers is different for each parser,
   resulting in an unfair comparison. The tests now configure a limit of 500K for
-  each parser, which is the hard-coded value in werkzeug and also a sensible
+  each parser, which is the hard-coded value in `werkzeug` and also a sensible
   default.
-* **03.10.2024** New version of multipart with slightly better results in some tests.
-* **05.10.2024** Added results for streaming-form-data parser.
+* **03.10.2024** New version of `multipart` with slightly better results in some tests.
+* **05.10.2024** Added results for `streaming-form-data` parser.
 
 ## Method
 
@@ -49,7 +49,7 @@ improvement for at least 100 runs in a row, then the best run is used to compute
 the theoretical maximum throughput per core.
 
 ¹) There is one exception: The limit for in-memory buffered files is set to
-500KB (hard-coded in werkzeug) to ensure a fair comparison.
+500KB (hard-coded in `werkzeug`) to ensure a fair comparison.
 
 
 ## Results
@@ -72,7 +72,7 @@ A simple form with just two small text fields.
 | email               | 3.85 MB/s (28%)   | 4.25 MB/s (22%)       |
 
 This scenario is so small that it shows initialization overhead more than actual
-parsing performance, which hurts streaming-form-data the most. Small forms like
+parsing performance, which hurts `streaming-form-data` the most. Small forms like
 these should better be transmitted as `application/x-www-form-urlencoded`, which
 has a lot less overhead compared to `multipart/form-data` and should be a lot
 faster.
@@ -213,7 +213,6 @@ still an interesting approach.
 
 I probably do not need to talk much about `email` or `cgi`. Both show mixed
 performance and are vulnerable to malicious inputs. `cgi` is deprecated (for
-good reasons) and `email` is not designed for `multipart/form-data` or large
-uploads at all. Both are unsuitable or even dangerous to use in modern web
-applications.
+good reasons) and `email` is not designed for form data or large uploads at all.
+Both are unsuitable or even dangerous to use in modern web applications.
 
