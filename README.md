@@ -15,9 +15,9 @@ available).
 * [python-multipart](https://pypi.org/project/python-multipart/) v0.0.12
   * Used in [Starlette](https://pypi.org/project/starlette/) and thus [FastAPI](https://pypi.org/project/fastapi/).
   * Causes import name conflicts with `multipart`.
-* [cgi](https://docs.python.org/3.12/library/cgi.html) CPython 3.12.3
+* [cgi.FieldStorage](https://docs.python.org/3.12/library/cgi.html) CPython 3.12.3
   * Deprecated in Python 3.11 and removed in Python 3.13
-* [email](https://docs.python.org/3.12/library/email.parser.html#email.message_from_binary_file) CPython 3.12.3
+* [email.parser.BytesFeedParser](https://docs.python.org/3.12/library/email.parser.html#email.parser.BytesFeedParser) CPython 3.12.3
   * Designed as a parser for emails, not `multipart/form-data`.
   * Buffers everything in memory, including large file uploads.
 
