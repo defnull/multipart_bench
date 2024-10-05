@@ -8,15 +8,18 @@ available).
 
 * [multipart](https://pypi.org/project/multipart/) v1.1
   * Will be used in [Bottle](https://pypi.org/project/bottle/). Disclaimer: I am the author of both *multipart* and *Bottle*.
+  * [CPython docs](https://docs.python.org/3.12/library/cgi.html) recommend it as a `cgi.FieldStorage` replacement.
 * [werkzeug](https://pypi.org/project/Werkzeug/) v3.0.4
-  * Used by [Flask](https://pypi.org/project/Flask/) and others.
+  * Used in [Flask](https://pypi.org/project/Flask/) and others.
+  * Does a lot more than *just* multipart parsing.
 * [python-multipart](https://pypi.org/project/python-multipart/) v0.0.12
-  * Used by [Starlette](https://pypi.org/project/starlette/) and thus [FastAPI](https://pypi.org/project/fastapi/)
+  * Used in [Starlette](https://pypi.org/project/starlette/) and thus [FastAPI](https://pypi.org/project/fastapi/).
+  * Causes import name conflicts with `multipart`.
 * [cgi](https://docs.python.org/3.12/library/cgi.html) CPython 3.12.3
-  * Deprecated and will be removed in Python 3.13
+  * Deprecated in Python 3.11 and removed in Python 3.13
 * [email](https://docs.python.org/3.12/library/email.parser.html#email.message_from_binary_file) CPython 3.12.3
-  * Buffers everything in memory and is unsuitable for large file uploads.
-  * Not a specialized `multipart/form-data` parser, but a general purpose parser for emails.
+  * Designed as a parser for emails, not `multipart/form-data`.
+  * Buffers everything in memory, including large file uploads.
 
 ## Updates
 
@@ -29,7 +32,7 @@ available).
   resulting in an unfair comparison. The tests now configure a limit of 500K for
   each parser, which is the hard-coded value in werkzeug and also a sensible
   default.
-* **03.10.2024** New version (and better numbers) for multipart.
+* **03.10.2024** New version of multipart with slightly better results in some tests.
 
 ## Method
 
