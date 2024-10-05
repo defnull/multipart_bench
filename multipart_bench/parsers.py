@@ -135,6 +135,55 @@ except ImportError:
     python_multipart_blocking = None
 
 try:
+    from streaming_form_data import StreamingFormDataParser
+    from streaming_form_data.targets import BaseTarget, NullTarget
+
+    class SpooledTarget(BaseTarget):
+        def __init__(self, *a, **ka):
+            BaseTarget.__init__(self, *a, **ka)
+            self.file = SpooledTemporaryFile(max_size=SPOOL_LIMIT)
+
+        def on_data_received(self, chunk):
+            self.file.write(chunk)
+
+    @add_parser
+    def streaming_sansio(scenario: Scenario):
+        headers = {"Content-Type": f"multipart/form-data; boundary={str(scenario.boundary, 'ASCII')}"}
+        parser = StreamingFormDataParser(headers=headers)
+        read = scenario.payload.read
+
+        for name in scenario.names:
+            parser.register(name, NullTarget())
+
+        while True:
+            chunk = read(scenario.chunksize)
+            if chunk:
+                parser.data_received(chunk)
+            else:
+                break
+
+    @add_parser
+    def streaming_blocking(scenario: Scenario):
+        headers = {"Content-Type": f"multipart/form-data; boundary={str(scenario.boundary, 'ASCII')}"}
+        parser = StreamingFormDataParser(headers=headers)
+        read = scenario.payload.read
+
+        for name in scenario.names:
+            parser.register(name, SpooledTarget())
+
+        while True:
+            chunk = read(scenario.chunksize)
+            if chunk:
+                parser.data_received(chunk)
+            else:
+                break
+
+except ImportError:
+    streaming_sansio = None
+    streaming_blocking = None
+
+
+try:
     import cgi
 
     @add_parser
@@ -180,6 +229,7 @@ parser_table = {
     "multipart": [multipart_blocking, multipart_sansio],
     "werkzeug": [werkzeug_blocking, werkzeug_sansio],
     "python-multipart": [python_multipart_blocking, python_multipart_sansio],
+    "streaming-form-data": [streaming_blocking, streaming_sansio],
     "cgi": [stdlib_cgi_blocking, None],
     "email": [stdlib_email_blocking, stdlib_email_sansio],
 }

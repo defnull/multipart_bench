@@ -45,7 +45,7 @@ if __name__ == "__main__":
                 result = scenario.timeit(variant, n=n, **bench_args)
                 row += [result.throughput]
                 best = max(best, result.throughput)
-                print(scenario.name, variant.__name__ if variant else None, result.min, n, len(result.results))
+                print(f"<!-- {scenario.name} {variant.__name__} {result.throughput / 1024 / 1024:.2f}MB/s -->")
             rows.append(row)
 
         def format(field, best):

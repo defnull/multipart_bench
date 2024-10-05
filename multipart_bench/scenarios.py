@@ -20,6 +20,7 @@ class Scenario:
         self.payload = io.BytesIO()
         self.chunksize = chunksize
         self._end_written = False
+        self.names = []
 
     def write(self, data):
         self.payload.write(data)
@@ -39,6 +40,7 @@ class Scenario:
 
     def field(self, name, filename=None, headers=None):
         self._write_boundary()
+        self.names.append(name)
         disposition = f'form-data; name="{name}"'
         if filename:
             disposition += f'; filename="{filename}"'
