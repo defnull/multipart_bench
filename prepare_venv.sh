@@ -5,6 +5,7 @@ python3 -mvenv venv
 pip install -U pip tabulate matplotlib numpy
 pip install streaming-form-data
 pip install werkzeug
+pip install django
 pip install python-multipart
 
 # The "python-multipart" package installs itself as just "multipart", causing a

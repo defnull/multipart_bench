@@ -218,11 +218,13 @@ slow parser logic is triggered less often.
 
 ## Conclusions:
 
-All modern parsers (`multipart`, `werkzeug`, `python-multipart` and
-`streaming-form-data`) are fast and behave correctly. All three offer
+All modern parsers (`multipart`, `werkzeug`, `python-multipart`,
+`streaming-form-data`) are fast and behave correctly. All four offer
 non-blocking APIs for asnycio/ASGI environments with very little overhead and a
 high level of control. There are differences in API design, code quality,
-maturity and documentation, but that's not the focus of this benchmark.
+maturity and documentation, but that's not the focus of this benchmark. The
+`django` parser is also pretty solid, but hard to use outside of Django
+applications.
 
 For me, `streaming-form-data` was a bit of a surprise. It's really fast for
 large file uploads, but not as fast as you might expect from a parser that is
