@@ -45,6 +45,42 @@ except ImportError:
     multipart_sansio = None
     multipart_blocking = None
 
+
+try:
+    from django.http.multipartparser import MultiPartParser
+    from django.http.request import HttpRequest
+    from django.core.files import uploadhandler
+    from django.conf import global_settings, settings
+    from django.core.files.uploadhandler import MemoryFileUploadHandler
+    from django.core.files.uploadhandler import TemporaryFileUploadHandler
+
+    settings.configure(
+        DEFAULT_CHARSET="utf8",
+        FILE_UPLOAD_MAX_MEMORY_SIZE=SPOOL_LIMIT,
+        DATA_UPLOAD_MAX_MEMORY_SIZE=SPOOL_LIMIT)
+    fake_request = HttpRequest()
+    handers = [
+        MemoryFileUploadHandler(fake_request),
+        TemporaryFileUploadHandler(fake_request)
+    ]
+
+    @add_parser
+    def django_blocking(scenario: Scenario):
+        MemoryFileUploadHandler.chunk_size = scenario.chunksize
+        MultiPartParser(
+            {"CONTENT_TYPE": f"multipart/form-data; boundary={str(scenario.boundary, 'ASCII')}",
+             "CONTENT_LENGTH": str(scenario.size)},
+            scenario.payload,
+            [uploadhandler.load_handler(handler, fake_request)
+            for handler in settings.FILE_UPLOAD_HANDLERS],
+            "utf8"
+        ).parse()
+
+except ImportError:
+    django_sansio = None
+    django_blocking = None
+
+
 try:
     import werkzeug.sansio.multipart as wsans
     import werkzeug.formparser as wstream
@@ -72,6 +108,7 @@ except ImportError:
     werkzeug_sansio = None
     werkzeug_blocking = None
     pass
+
 
 try:
     import python_multipart
@@ -133,6 +170,7 @@ try:
 except ImportError:
     python_multipart_sansio = None
     python_multipart_blocking = None
+
 
 try:
     from streaming_form_data import StreamingFormDataParser
@@ -228,6 +266,7 @@ def stdlib_email_blocking(scenario: Scenario):
 parser_table = {
     "multipart": [multipart_blocking, multipart_sansio],
     "werkzeug": [werkzeug_blocking, werkzeug_sansio],
+    "django": [django_blocking, None],
     "python-multipart": [python_multipart_blocking, python_multipart_sansio],
     "streaming-form-data": [streaming_blocking, streaming_sansio],
     "cgi": [stdlib_cgi_blocking, None],
