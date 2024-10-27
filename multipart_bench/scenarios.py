@@ -3,7 +3,7 @@ import io
 import timeit
 import time
 import string
-import random
+import json
 
 
 class Scenario:
@@ -18,29 +18,43 @@ class Scenario:
         self.description = description
         self.boundary = boundary
         self.payload = io.BytesIO()
+        self._seek = self.payload.seek
         self.chunksize = chunksize
+
+        self.fields = [] # [[name, filename, headers, size]]
+        self._in_body = False
         self._end_written = False
-        self.names = []
+
+    @property
+    def content_type(self):
+        return f'multipart/form-data; boundary="{self.boundary.decode("ASCII")}"'
+
+    @property
+    def fieldnames(self):
+        return [field[0] for field in self.fields]
 
     def write(self, data):
+        if self._in_body:
+            self.fields[-1][3] += len(data)
         self.payload.write(data)
 
     def _write_boundary(self):
+        self._in_body = False
         if self.payload.tell() > 0:
             self.write(b"\r\n")
         self.write(b"--%s\r\n" % (self.boundary,))
 
     def _write_terminator(self):
+        self._in_body = False
         if self.payload.tell() > 0:
             self.write(b"\r\n")
-        self.write(b"--%s--" % (self.boundary,))
+        self.write(b"--%s--\r\n" % (self.boundary,))
 
     def _write_header(self, name, value):
         self.write(name.encode("utf8") + b": " + value.encode("utf8") + b"\r\n")
 
     def field(self, name, filename=None, headers=None):
         self._write_boundary()
-        self.names.append(name)
         disposition = f'form-data; name="{name}"'
         if filename:
             disposition += f'; filename="{filename}"'
@@ -48,6 +62,8 @@ class Scenario:
         for header, value in headers or []:
             self._write_header(header, value)
         self.write(b"\r\n")
+        self.fields.append([name, filename, headers or [], 0])
+        self._in_body=True
         return self
 
     def pattern(self, pattern, size):
@@ -65,20 +81,22 @@ class Scenario:
             self._write_terminator()
             self.size = self.payload.tell()
         return self
+    
+    def name_for(self, func):
+        return f"{self.name}-{func.__name__}"
 
-    def reset(self):
-        self.payload.seek(0)
-        return self
+    def run_once(self, func):
+        self._seek(0)
+        func(self)
 
     def run_bench(self, func, n=1):
-        return timeit.timeit(lambda: func(self.reset()), "pass", number=n) / n
+        return timeit.timeit(lambda: self.run_once(func), "pass", number=n) / n
 
-    def timeit(self, func, n=1, mintime=10, minrepeat=5, confidence=5):
+    def timeit(self, func, n=1, mintime=10, confidence=5):
         """Benchmark a single function that takes a scenario.
 
         :param func: Function to test.
         :param mintime: Repeat for at least this many seconds.
-        :param minrepeat: Repeat for at least this many times.
         :param confidence: Repeat until at least this many runs could not beat the current best time.
         """
         start = time.time()
@@ -86,9 +104,8 @@ class Scenario:
         best = 2**64
         loose_count = 0
         while (
-            time.time() - start < mintime
-            or len(results) < minrepeat
-            or loose_count < confidence
+            loose_count < confidence
+            or time.time() - start < mintime
         ):
             r = self.run_bench(func, n)
             results.append(r)
@@ -98,50 +115,47 @@ class Scenario:
             else:
                 loose_count += 1
 
-        return Result(self, func, results)
+        return Result(self.name_for(func), self.size, results)
 
 
-class Result(namedtuple("Result", "scenario func results")):
+class Result(namedtuple("Result", "name size times")):
+
     @property
     def min(self):
-        return min(self.results)
+        return min(self.times)
+
+    @property
+    def max(self):
+        return max(self.times)
 
     @property
     def avg(self):
-        return sum(self.results) / len(self.results)
+        return sum(self.times) / len(self.times)
 
     @property
     def mean(self):
-        return self.results[len(self.results) // 2]
+        return sorted(self.times)[len(self.times) // 2]
 
     @property
     def throughput(self):
-        return self.scenario.size / self.min
+        return self.size / self.min
 
     @property
     def count(self):
-        return len(self.results)
+        return len(self.times)
 
-    @property
-    def name(self):
-        return self.func.__name__
+    def save_to(self, path):
+        with open(path, "w") as fp:
+            json.dump(self._asdict(), fp)
 
-    def as_dict(self):
-        return {
-            "scenario": {
-                "name": self.scenario.name,
-                "description": self.scenario.description,
-                "size": self.scenario.size,
-            },
-            "parser": {
-                "name": self.func.__name__,
-                "description": self.func.__doc__ or "",
-            },
-            "results": self.results,
-        }
+    @classmethod
+    def load(self, path):
+        with open(path, "r") as fp:
+            obj = json.load(fp)
+        return Result(**obj)
 
     def __str__(self):
-        return f"{self.scenario.name} {self.name} {self.min*1000:.2f}ms {self.throughput/1024/1024:.2f}MB/s"
+        return f"{self.name} {self.min*1000:.2f}ms {self.throughput/1024/1024:.2f}MB/s"
 
 
 ##
@@ -155,7 +169,6 @@ def add_scenario(func):
     scenario = Scenario(func.__name__, func.__doc__.strip())
     func(scenario)
     scenario.end()
-    scenario.reset()
     SCENARIOS.append(scenario)
     return scenario
 
@@ -200,3 +213,11 @@ def worstcase_bchar(payload):
     "A 1MB upload that contains parts of the boundary"
     # boundary is ------------------------WqclBHaXe8KIsoSum4zfZ6
     payload.field("file", "file.bin").pattern("Wgcl", 1024 * 1024)
+
+@add_scenario
+def worstcase_junk(payload: Scenario):
+    "Junk before the first and after the last boundary (1MB each)"
+    payload.pattern("\r\n", 1024 * 1024)
+    payload.field("file", "file.bin").write(b"Content\r\n")
+    payload.end()
+    payload.pattern("\r\n", 1024 * 1024)

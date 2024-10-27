@@ -32,14 +32,13 @@ try:
 
     @add_parser
     def multipart_blocking(scenario: Scenario):
-        list(
-            multipart.MultipartParser(
-                scenario.payload,
-                boundary=scenario.boundary,
-                buffer_size=scenario.chunksize,
-                spool_limit=SPOOL_LIMIT,
-            )
-        )
+        list(multipart.MultipartParser(
+            scenario.payload,
+            boundary=scenario.boundary,
+            buffer_size=scenario.chunksize,
+            spool_limit=SPOOL_LIMIT,
+        ))
+        
 
 except ImportError:
     multipart_sansio = None
@@ -50,7 +49,7 @@ try:
     from django.http.multipartparser import MultiPartParser
     from django.http.request import HttpRequest
     from django.core.files import uploadhandler
-    from django.conf import global_settings, settings
+    from django.conf import settings
     from django.core.files.uploadhandler import MemoryFileUploadHandler
     from django.core.files.uploadhandler import TemporaryFileUploadHandler
 
@@ -68,7 +67,7 @@ try:
     def django_blocking(scenario: Scenario):
         MemoryFileUploadHandler.chunk_size = scenario.chunksize
         MultiPartParser(
-            {"CONTENT_TYPE": f"multipart/form-data; boundary={str(scenario.boundary, 'ASCII')}",
+            {"CONTENT_TYPE": scenario.content_type,
              "CONTENT_LENGTH": str(scenario.size)},
             scenario.payload,
             [uploadhandler.load_handler(handler, fake_request)
@@ -113,8 +112,11 @@ except ImportError:
 try:
     import python_multipart
 
+    # This is the parser used by starlette (and FastAPI) so we call it that
+    # to be able to better filter by name in run.py
+
     @add_parser
-    def python_multipart_sansio(scenario: Scenario):
+    def starlette_sansio(scenario: Scenario):
         parser = python_multipart.MultipartParser(
             scenario.boundary,
             callbacks={
@@ -129,17 +131,14 @@ try:
             },
         )
 
+        chunksize = scenario.chunksize
         read = scenario.payload.read
-        while True:
-            chunk = read(scenario.chunksize)
-            if chunk:
-                parser.write(chunk)
-            else:
-                parser.finalize()
-                break
+        for chunk in iter(lambda: read(chunksize), b""):
+            parser.write(chunk)
+        parser.finalize()
 
     @add_parser
-    def python_multipart_blocking(scenario: Scenario):
+    def starlette_blocking(scenario: Scenario):
         def on_field(f):
             pass
 
@@ -157,19 +156,16 @@ try:
             boundary=scenario.boundary,
             config={"MAX_MEMORY_FILE_SIZE": SPOOL_LIMIT},
         )
+        chunksize = scenario.chunksize
         read = scenario.payload.read
 
-        while True:
-            chunk = read(scenario.chunksize)
-            if chunk:
-                parser.write(chunk)
-            else:
-                parser.finalize()
-                break
+        for chunk in iter(lambda: read(chunksize), b""):
+            parser.write(chunk)
+        parser.finalize()
 
 except ImportError:
-    python_multipart_sansio = None
-    python_multipart_blocking = None
+    starlette_sansio = None
+    starlette_blocking = None
 
 
 try:
@@ -186,35 +182,30 @@ try:
 
     @add_parser
     def streaming_sansio(scenario: Scenario):
-        headers = {"Content-Type": f"multipart/form-data; boundary={str(scenario.boundary, 'ASCII')}"}
+        headers = {"Content-Type": scenario.content_type}
         parser = StreamingFormDataParser(headers=headers)
+        chunksize = scenario.chunksize
         read = scenario.payload.read
 
-        for name in scenario.names:
+        for name in scenario.fieldnames:
             parser.register(name, NullTarget())
 
-        while True:
-            chunk = read(scenario.chunksize)
-            if chunk:
-                parser.data_received(chunk)
-            else:
-                break
+        for chunk in iter(lambda: read(chunksize), b""):
+            parser.data_received(chunk)
 
     @add_parser
     def streaming_blocking(scenario: Scenario):
-        headers = {"Content-Type": f"multipart/form-data; boundary={str(scenario.boundary, 'ASCII')}"}
+        headers = {"Content-Type": scenario.content_type}
         parser = StreamingFormDataParser(headers=headers)
+        chunksize = scenario.chunksize
         read = scenario.payload.read
 
-        for name in scenario.names:
+        for name in scenario.fieldnames:
             parser.register(name, SpooledTarget())
 
-        while True:
-            chunk = read(scenario.chunksize)
-            if chunk:
-                parser.data_received(chunk)
-            else:
-                break
+        for chunk in iter(lambda: read(chunksize), b""):
+            parser.data_received(chunk)
+
 
 except ImportError:
     streaming_sansio = None
@@ -222,29 +213,45 @@ except ImportError:
 
 
 try:
+    from emmett_core._emmett_core import MultiPartReader
+
+    @add_parser
+    def emmett_blocking(scenario: Scenario):
+        read = scenario.payload.read
+        chunksize = scenario.chunksize
+        parser = MultiPartReader(scenario.content_type)
+        for chunk in iter(lambda: read(chunksize), b""):
+            parser.parse(chunk)
+        list(parser.contents())
+
+except ImportError:
+    emmett_blocking = None
+
+
+try:
     import cgi
 
     @add_parser
-    def stdlib_cgi_blocking(scenario: Scenario):
+    def cgi_blocking(scenario: Scenario):
         fs = cgi.FieldStorage(
             scenario.payload,
             environ={
                 "REQUEST_METHOD": "POST",
                 "QUERY_STRING": "",
-                "CONTENT_TYPE": f'multipart/form-data; boundary={scenario.boundary.decode("ASCII")}',
+                "CONTENT_TYPE": scenario.content_type,
             },
         )
         list(fs)
 
 except ImportError:
-    stdlib_cgi_blocking = None
+    cgi_blocking = None
 
 import email.parser
 
 @add_parser
-def stdlib_email_sansio(scenario: Scenario):
+def email_sansio(scenario: Scenario):
     parser = email.parser.BytesFeedParser()
-    parser.feed(b"MIME-Version: 1.0\r\n" + b"Content-Type: multipart/form-data; boundary=" + scenario.boundary + b"\r\n")
+    parser.feed(b"MIME-Version: 1.0\r\nContent-Type: " + scenario.content_type.encode("ASCII") + b"\r\n")
     read = scenario.payload.read
     chunksize = scenario.chunksize
     while data := read(chunksize):
@@ -257,8 +264,8 @@ def stdlib_email_sansio(scenario: Scenario):
 # in a way that buffers to disk.
 
 @add_parser
-def stdlib_email_blocking(scenario: Scenario):
-    for part in stdlib_email_sansio(scenario):
+def email_blocking(scenario: Scenario):
+    for part in email_sansio(scenario):
         target = SpooledTemporaryFile(max_size=SPOOL_LIMIT)
         target.write(part.get_payload().encode("utf8"))
         target.close()
@@ -267,8 +274,9 @@ parser_table = {
     "multipart": [multipart_blocking, multipart_sansio],
     "werkzeug": [werkzeug_blocking, werkzeug_sansio],
     "django": [django_blocking, None],
-    "python-multipart": [python_multipart_blocking, python_multipart_sansio],
+    "python-multipart": [starlette_blocking, starlette_sansio],
     "streaming-form-data": [streaming_blocking, streaming_sansio],
-    "cgi": [stdlib_cgi_blocking, None],
-    "email": [stdlib_email_blocking, stdlib_email_sansio],
+    "emmett-core": [emmett_blocking, None],
+    "cgi": [cgi_blocking, None],
+    "email": [email_blocking, email_sansio],
 }
