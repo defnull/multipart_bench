@@ -52,9 +52,10 @@ uploads.
 * **05.10.2024** Added results for `streaming-form-data` parser.
 * **25.10.2024** Added results for `django` parser.
 * **06.11.2024** Added results for `emett-core` parser.
-* **24.12.2024** Added "worstcase_junk" scenario but waiting for a fix in the most
-  affected libraries before publishing results, as this may qualify as a security
-  issue and could be abused for denial of service attacks.
+* **24.12.2024** New versions for many libraries and an additional "worstcase_junk"
+  scenario. The results were so bad for some of the libraries that I reported it
+  as a potential security issue (DoS vulnerability) to the most affected libraries
+  and waited for a fix to be available before publishing results.
 
 
 ## Method
@@ -292,6 +293,12 @@ the most affected libraries to release fixes before I published any results, as
 this may be abused for denial of service attacks and qualify as a security issue.
 The results are still really bad for most of the parsers, but not as catastrophic
 as a couple of weeks ago. Update your dependencies!
+
+You may have noticed that the blocking `multipart` parser is almost as fast as the
+non-blocking parser in this scenario, while the other scenarios show a way bigger
+difference between blocking and non-blocking variants. This is because 'junk'
+does not emit any parser events and the blocking parts of the parser do not have
+to do much.
 
 **Note:** `emmett-core` fails here, which is good! Malicious input can and should
 be rejected. `multipart` will also bail out very quickly in *strict* mode, but
