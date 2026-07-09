@@ -1,3 +1,15 @@
+{% macro render_table(table) -%}
+| Parser | Non-Blocking (MB/s) | Blocking (MB/s) |
+|--------|---------------------|-----------------|
+{% for row in table.rows -%}
+| {{ row.name }} | {{ row.sansio }} | {{ row.blocking }} |
+{% endfor -%}
+{%- endmacro %}
+{% macro render_plots(scenario) -%}
+![Non-blocking parser throughput](plots/{{ scenario }}-non-blocking.svg)
+
+![Blocking parser throughput](plots/{{ scenario }}-blocking.svg)
+{%- endmacro %}
 # Benchmark for Python multipart/form-data parsers
 
 This repository contains scenarios and parser tests for different Python based
@@ -8,25 +20,25 @@ also the reason I'm benchmarking parsers in the first place.
 
 ## Contestants
 
-* [multipart](https://pypi.org/project/multipart/) v2.0.0.dev0
+* [multipart](https://pypi.org/project/multipart/) v{{ package_version("multipart") }}
   * Used in [Bottle](https://pypi.org/project/bottle/), [LiteStar](https://litestar.dev/), [Zope](https://zope.readthedocs.io/) and others.
   * [CPython docs](https://docs.python.org/3.12/library/cgi.html) recommend it as a `cgi.FieldStorage` replacement.
   * Disclaimer: I am the author and maintainer of this library.
-* [werkzeug](https://pypi.org/project/Werkzeug/) v3.1.8
+* [werkzeug](https://pypi.org/project/Werkzeug/) v{{ package_version("Werkzeug") }}
   * Used in [Flask](https://pypi.org/project/Flask/) and others.
   * Does a lot more than *just* multipart parsing.
-* [django](https://pypi.org/project/Django/) v6.0.7
+* [django](https://pypi.org/project/Django/) v{{ package_version("Django") }}
   * Full featured web framework, not just a parser.
-* [python-multipart](https://pypi.org/project/python-multipart/) v0.0.32
+* [python-multipart](https://pypi.org/project/python-multipart/) v{{ package_version("python-multipart") }}
   * Used in [Starlette](https://pypi.org/project/starlette/) and thus [FastAPI](https://pypi.org/project/fastapi/).
-* [streaming-form-data](https://pypi.org/project/streaming-form-data/) v2.1.0
+* [streaming-form-data](https://pypi.org/project/streaming-form-data/) v{{ package_version("streaming-form-data") }}
   * Partly written in Cython.
-* [emmett-core](https://pypi.org/project/emmett-core/) v1.4.1
+* [emmett-core](https://pypi.org/project/emmett-core/) v{{ package_version("emmett-core") }}
   * Mostly written in Rust.
   * Similar to Django or werkzeug, this library does a lot more than *just* multipart parsing. It is not a stand-alone parser, but a support library for the [emmett](https://emmett.sh/) framework and rarely used outside of this context.
-* [cgi.FieldStorage](https://docs.python.org/3.12/library/cgi.html) CPython 3.12.3
+* [cgi.FieldStorage](https://docs.python.org/3.12/library/cgi.html) CPython {{ python_version() }}
   * Deprecated in Python 3.11 and removed in Python 3.13
-* [email.parser.BytesFeedParser](https://docs.python.org/3.12/library/email.parser.html#email.parser.BytesFeedParser) CPython 3.12.3
+* [email.parser.BytesFeedParser](https://docs.python.org/3.12/library/email.parser.html#email.parser.BytesFeedParser) CPython {{ python_version() }}
   * Designed as a parser for emails, not `multipart/form-data`.
   * Buffers everything in memory, including large file uploads.
 
@@ -66,7 +78,7 @@ uploads.
 ## Method
 
 All tests were performed on a pretty old "AMD Ryzen 5 3600" running Linux 6.17.0
-and Python 3.12.3 with highest possible priority and pinned to a single core.
+and Python {{ python_version() }} with highest possible priority and pinned to a single core.
 
 For each test, the parser is created with default¹ settings and the results are
 thrown away. Some parsers buffer to disk, but `TEMP` points to a ram-disk to
@@ -110,21 +122,9 @@ clear winner.
 `multipart/form-data` and should be a lot faster to parse, so take this benchmark
 with a large grain of salt. This is an uncommon and artificial scenario.
 
-![Non-blocking parser throughput](plots/simple-non-blocking.svg)
+{{ render_plots("simple") }}
 
-![Blocking parser throughput](plots/simple-blocking.svg)
-
-| Parser | Non-Blocking (MB/s) | Blocking (MB/s) |
-|--------|---------------------|-----------------|
-| multipart | 20.96 MB/s (100%) | 10.70 MB/s (100%) |
-| python-multipart | 5.50 MB/s (26%) | 3.24 MB/s (30%) |
-| werkzeug | 4.01 MB/s (19%) | 3.06 MB/s (29%) |
-| django | - | 1.74 MB/s (16%) |
-| streaming-form-data | 0.45 MB/s (2%) | 0.43 MB/s (4%) |
-| cgi | - | 2.60 MB/s (24%) |
-| email | 2.41 MB/s (11%) | 2.19 MB/s (20%) |
-| emmett-core | - | 54.27 MB/s (507%) |
-
+{{ render_table(results.simple) }}
 
 
 ### Scenario: large
@@ -144,21 +144,9 @@ reasonably well, as it is designed for this type of line-based text input and
 even surpasses many of the other pure-python parsers, but `multipart` is still
 more than twice as fast.
 
-![Non-blocking parser throughput](plots/large-non-blocking.svg)
+{{ render_plots("large") }}
 
-![Blocking parser throughput](plots/large-blocking.svg)
-
-| Parser | Non-Blocking (MB/s) | Blocking (MB/s) |
-|--------|---------------------|-----------------|
-| multipart | 33.03 MB/s (100%) | 21.64 MB/s (100%) |
-| python-multipart | 10.65 MB/s (32%) | 5.57 MB/s (26%) |
-| werkzeug | 6.89 MB/s (21%) | 5.25 MB/s (24%) |
-| django | - | 3.18 MB/s (15%) |
-| streaming-form-data | 0.62 MB/s (2%) | 0.60 MB/s (3%) |
-| cgi | - | 3.47 MB/s (16%) |
-| email | 7.21 MB/s (22%) | 6.12 MB/s (28%) |
-| emmett-core | - | 80.12 MB/s (370%) |
-
+{{ render_table(results.large) }}
 
 
 ### Scenario: upload
@@ -180,21 +168,9 @@ is to blame. The parser is fed chunks of bytes and each round involves call-over
 and expensive copy operations. Pure python code can work directly with the
 provided byte string and can avoid a copy in most cases. But that's just a guess.
 
-![Non-blocking parser throughput](plots/upload-non-blocking.svg)
+{{ render_plots("upload") }}
 
-![Blocking parser throughput](plots/upload-blocking.svg)
-
-| Parser | Non-Blocking (MB/s) | Blocking (MB/s) |
-|--------|---------------------|-----------------|
-| multipart | 7917.98 MB/s (100%) | 592.66 MB/s (100%) |
-| python-multipart | 5898.54 MB/s (74%) | 576.24 MB/s (97%) |
-| werkzeug | 1781.72 MB/s (23%) | 390.91 MB/s (66%) |
-| django | - | 413.69 MB/s (70%) |
-| streaming-form-data | 3739.50 MB/s (47%) | 467.73 MB/s (79%) |
-| cgi | - | 90.56 MB/s (15%) |
-| email | 61.00 MB/s (1%) | 51.84 MB/s (9%) |
-| emmett-core | - | 209.11 MB/s (35%) |
-
+{{ render_table(results.upload) }}
 
 
 ### Scenario: mixed
@@ -207,21 +183,9 @@ This is the most realistic test and shows similar results to the upload scenario
 pure-python parsers, but still way faster than the line-based `cgi` and `email`
 parsers. `multipart` outperforms all of them by a significant margin.
 
-![Non-blocking parser throughput](plots/mixed-non-blocking.svg)
+{{ render_plots("mixed") }}
 
-![Blocking parser throughput](plots/mixed-blocking.svg)
-
-| Parser | Non-Blocking (MB/s) | Blocking (MB/s) |
-|--------|---------------------|-----------------|
-| multipart | 7060.78 MB/s (100%) | 569.70 MB/s (100%) |
-| python-multipart | 4937.82 MB/s (70%) | 477.80 MB/s (84%) |
-| werkzeug | 1612.26 MB/s (23%) | 363.60 MB/s (64%) |
-| django | - | 367.26 MB/s (64%) |
-| streaming-form-data | 1446.79 MB/s (20%) | 366.13 MB/s (64%) |
-| cgi | - | 59.80 MB/s (10%) |
-| email | 45.11 MB/s (1%) | 41.31 MB/s (7%) |
-| emmett-core | - | 162.78 MB/s (29%) |
-
+{{ render_table(results.mixed) }}
 
 
 ### Scenario: worstcase_crlf
@@ -237,21 +201,9 @@ this input. `streaming-form-data` seems to struggle a lot here, but not as much
 as the line-based parsers. Those choke on the high number of line-endings and are
 practically unusable.
 
-![Non-blocking parser throughput](plots/worstcase_crlf-non-blocking.svg)
+{{ render_plots("worstcase_crlf") }}
 
-![Blocking parser throughput](plots/worstcase_crlf-blocking.svg)
-
-| Parser | Non-Blocking (MB/s) | Blocking (MB/s) |
-|--------|---------------------|-----------------|
-| multipart | 4764.80 MB/s (100%) | 538.72 MB/s (100%) |
-| python-multipart | 4212.23 MB/s (88%) | 464.25 MB/s (86%) |
-| werkzeug | 2404.59 MB/s (50%) | 406.56 MB/s (75%) |
-| django | - | 384.60 MB/s (71%) |
-| streaming-form-data | 31.58 MB/s (1%) | 29.24 MB/s (5%) |
-| cgi | - | 3.11 MB/s (1%) |
-| email | 3.56 MB/s (0%) | 3.55 MB/s (1%) |
-| emmett-core | - | 161.30 MB/s (30%) |
-
+{{ render_table(results.worstcase_crlf) }}
 
 
 ### Scenario: worstcase_lf
@@ -265,21 +217,9 @@ two line-based parsers on the other hand are even worse than before. Throughput
 is roughly halved, probably because there are twice as many line-breaks (and thus
 lines) in this scenario.
 
-![Non-blocking parser throughput](plots/worstcase_lf-non-blocking.svg)
+{{ render_plots("worstcase_lf") }}
 
-![Blocking parser throughput](plots/worstcase_lf-blocking.svg)
-
-| Parser | Non-Blocking (MB/s) | Blocking (MB/s) |
-|--------|---------------------|-----------------|
-| multipart | 7060.39 MB/s (100%) | 576.96 MB/s (100%) |
-| python-multipart | 4687.22 MB/s (66%) | 498.97 MB/s (86%) |
-| werkzeug | 2191.02 MB/s (31%) | 407.42 MB/s (71%) |
-| django | - | 377.97 MB/s (66%) |
-| streaming-form-data | 1334.40 MB/s (19%) | 362.86 MB/s (63%) |
-| cgi | - | 1.50 MB/s (0%) |
-| email | 2.22 MB/s (0%) | 2.24 MB/s (0%) |
-| emmett-core | - | 163.69 MB/s (28%) |
-
+{{ render_table(results.worstcase_lf) }}
 
 
 ### Scenario: worstcase_bchar
@@ -293,21 +233,9 @@ compared to the non-malicious scenarios, but is still the fastest one of the bun
 `streaming-form-data` takes the biggest hit here, it is now even slower than the
 line-based legacy parsers.
 
-![Non-blocking parser throughput](plots/worstcase_bchar-non-blocking.svg)
+{{ render_plots("worstcase_bchar") }}
 
-![Blocking parser throughput](plots/worstcase_bchar-blocking.svg)
-
-| Parser | Non-Blocking (MB/s) | Blocking (MB/s) |
-|--------|---------------------|-----------------|
-| multipart | 4760.55 MB/s (100%) | 539.67 MB/s (100%) |
-| python-multipart | 2190.70 MB/s (46%) | 418.56 MB/s (78%) |
-| werkzeug | 2020.43 MB/s (42%) | 397.70 MB/s (74%) |
-| django | - | 363.08 MB/s (67%) |
-| streaming-form-data | 31.77 MB/s (1%) | 29.49 MB/s (5%) |
-| cgi | - | 35.10 MB/s (7%) |
-| email | 37.13 MB/s (1%) | 34.42 MB/s (6%) |
-| emmett-core | - | 150.56 MB/s (28%) |
-
+{{ render_table(results.worstcase_bchar) }}
 
 
 ### Scenario: worstcase_junk
@@ -339,21 +267,9 @@ in *strict* mode, but these tests are run in default mode which accepts some amo
 unusual input for compatibility reasons. It's still mostly unaffected, even in non-strict
 mode, as it manages to skip junk fast enough.
 
-![Non-blocking parser throughput](plots/worstcase_junk-non-blocking.svg)
+{{ render_plots("worstcase_junk") }}
 
-![Blocking parser throughput](plots/worstcase_junk-blocking.svg)
-
-| Parser | Non-Blocking (MB/s) | Blocking (MB/s) |
-|--------|---------------------|-----------------|
-| multipart | 5595.21 MB/s (100%) | 5254.00 MB/s (100%) |
-| python-multipart | *failed* | *failed* |
-| werkzeug | 39.10 MB/s (1%) | 39.30 MB/s (1%) |
-| django | - | *failed* |
-| streaming-form-data | *failed* | *failed* |
-| cgi | - | 604.65 MB/s (12%) |
-| email | 81.04 MB/s (1%) | 80.72 MB/s (2%) |
-| emmett-core | - | *failed* |
-
+{{ render_table(results.worstcase_junk) }}
 
 
 ## Conclusion
@@ -388,4 +304,3 @@ results, look at the test cases, check out the projects, try them out and make u
 your own mind.
 
 Thanks for reading.
-

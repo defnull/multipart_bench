@@ -3,4 +3,4 @@ emmett-core
 werkzeug
 django
 python-multipart
-multipart
+-e /home/marc/coding/multipart

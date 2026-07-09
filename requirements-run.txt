@@ -1,3 +1,7 @@
 tabulate
+jinja2
 matplotlib
 numpy
+scipy
+scalene
+py-spy

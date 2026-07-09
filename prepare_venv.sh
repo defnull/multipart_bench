@@ -3,5 +3,5 @@ python3 -mvenv .venv
 . .venv/bin/activate
 
 pip install -U pip
-pip install -r requirements-run.txt
-pip install -r requirements-parsers.txt
+pip install -Ur requirements-run.txt
+pip install -Ur requirements-parsers.txt

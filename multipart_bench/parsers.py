@@ -4,11 +4,25 @@ from .scenarios import Scenario
 PARSERS = []
 # Size limit for memory-buffered files is hard-coded in werkzeug, so we
 # set it to other parsers to be fair.
-SPOOL_LIMIT = 1024*500
+SPOOL_LIMIT = 1024 * 500
+
 
 def add_parser(func):
     PARSERS.append(func)
     return func
+
+
+def dummy_parser(scenario: Scenario):
+    """Overhead that all parsers have in common.
+
+    Used to remove benchmark overhead and measure only the actual work
+    done by the parser.
+    """
+    scenario.boundary
+    chunksize = scenario.chunksize
+    read = scenario.payload.read
+    for chunk in iter(lambda: read(chunksize), b""):
+        pass
 
 
 try:
@@ -18,32 +32,27 @@ try:
     def multipart_sansio(scenario: Scenario):
         read = scenario.payload.read
         chunksize = scenario.chunksize
-        mps = multipart.MultipartSegment
         with multipart.PushMultipartParser(scenario.boundary) as parser:
             parse = parser.parse
             while not parser.closed:
                 for event in parse(read(chunksize)):
-                    if isinstance(event, mps):
-                        pass
-                    elif event:
-                        pass
-                    else:
-                        pass
+                    pass
 
     @add_parser
     def multipart_blocking(scenario: Scenario):
-        list(multipart.MultipartParser(
-            scenario.payload,
-            boundary=scenario.boundary,
-            buffer_size=scenario.chunksize,
-            spool_limit=SPOOL_LIMIT,
-        ))
-        
+        list(
+            multipart.MultipartParser(
+                scenario.payload,
+                boundary=scenario.boundary,
+                buffer_size=scenario.chunksize,
+                spool_limit=SPOOL_LIMIT,
+            )
+        )
+
 
 except ImportError:
     multipart_sansio = None
     multipart_blocking = None
-
 
 try:
     from django.http.multipartparser import MultiPartParser
@@ -56,23 +65,28 @@ try:
     settings.configure(
         DEFAULT_CHARSET="utf8",
         FILE_UPLOAD_MAX_MEMORY_SIZE=SPOOL_LIMIT,
-        DATA_UPLOAD_MAX_MEMORY_SIZE=SPOOL_LIMIT)
+        DATA_UPLOAD_MAX_MEMORY_SIZE=SPOOL_LIMIT,
+    )
     fake_request = HttpRequest()
     handers = [
         MemoryFileUploadHandler(fake_request),
-        TemporaryFileUploadHandler(fake_request)
+        TemporaryFileUploadHandler(fake_request),
     ]
 
     @add_parser
     def django_blocking(scenario: Scenario):
         MemoryFileUploadHandler.chunk_size = scenario.chunksize
         MultiPartParser(
-            {"CONTENT_TYPE": scenario.content_type,
-             "CONTENT_LENGTH": str(scenario.size)},
+            {
+                "CONTENT_TYPE": scenario.content_type,
+                "CONTENT_LENGTH": str(scenario.size),
+            },
             scenario.payload,
-            [uploadhandler.load_handler(handler, fake_request)
-            for handler in settings.FILE_UPLOAD_HANDLERS],
-            "utf8"
+            [
+                uploadhandler.load_handler(handler, fake_request)
+                for handler in settings.FILE_UPLOAD_HANDLERS
+            ],
+            "utf8",
         ).parse()
 
 except ImportError:
@@ -248,20 +262,27 @@ except ImportError:
 
 import email.parser
 
+
 @add_parser
 def email_sansio(scenario: Scenario):
     parser = email.parser.BytesFeedParser()
-    parser.feed(b"MIME-Version: 1.0\r\nContent-Type: " + scenario.content_type.encode("ASCII") + b"\r\n")
+    parser.feed(
+        b"MIME-Version: 1.0\r\nContent-Type: "
+        + scenario.content_type.encode("ASCII")
+        + b"\r\n"
+    )
     read = scenario.payload.read
     chunksize = scenario.chunksize
     while data := read(chunksize):
         parser.feed(data)
     return parser.close().get_payload()
 
-# Payload is always memory-buffered, which makes this parser unsuitable for 
+
+# Payload is always memory-buffered, which makes this parser unsuitable for
 # large file uploads and unsafe to use in a web application. To get comparable
 # results for a blocking version, we assume that someone subclasses Message
 # in a way that buffers to disk.
+
 
 @add_parser
 def email_blocking(scenario: Scenario):
@@ -270,13 +291,14 @@ def email_blocking(scenario: Scenario):
         target.write(part.get_payload().encode("utf8"))
         target.close()
 
+
 parser_table = {
     "multipart": [multipart_blocking, multipart_sansio],
+    "python-multipart": [starlette_blocking, starlette_sansio],
     "werkzeug": [werkzeug_blocking, werkzeug_sansio],
     "django": [django_blocking, None],
-    "python-multipart": [starlette_blocking, starlette_sansio],
     "streaming-form-data": [streaming_blocking, streaming_sansio],
-    "emmett-core": [emmett_blocking, None],
     "cgi": [cgi_blocking, None],
     "email": [email_blocking, email_sansio],
+    "emmett-core": [emmett_blocking, None],
 }
