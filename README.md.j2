@@ -142,7 +142,7 @@ does not have to call into Python code for each field. The Rust parser thus
 completely bypasses the python interpreter overhead. `email` also performs
 reasonably well, as it is designed for this type of line-based text input and
 even surpasses many of the other pure-python parsers, but `multipart` is still
-more than twice as fast.
+more than three times as fast.
 
 {{ render_plots("large") }}
 
@@ -166,7 +166,7 @@ test that actually moves some bytes, it falls back significantly. My best guess
 is that the context translation overhead between Python and the native Rust code
 is to blame. The parser is fed chunks of bytes and each round involves call-overhead
 and expensive copy operations. Pure python code can work directly with the
-provided byte string and can avoid a copy in most cases. But that's just a guess.
+provided byte string and avoid some of that overhead. But that's just a guess.
 
 {{ render_plots("upload") }}
 
@@ -193,13 +193,13 @@ parsers. `multipart` outperforms all of them by a significant margin.
 **Description**: A 1MB upload that contains nothing but windows line-breaks.
 
 This is the first scenario that should not happen under normal circumstances
-but is still an important factor if you want to prevent malicious uploads from
+but is still an important test if you want to prevent malicious uploads from
 slowing down your web service. `multipart`, `python-multipart`, `werkzeug` and
 `django` are mostly unaffected and produce consistent results. `emmett-core` is
 still slower than the modern pure-python parsers, but not specifically because of
-this input. `streaming-form-data` seems to struggle a lot here, but not as much
-as the line-based parsers. Those choke on the high number of line-endings and are
-practically unusable.
+this input. `streaming-form-data` is now several magnitudes slower than it should be,
+but still faster than the line-based parsers. Those choke on the high number of
+line-breaks and are practically unusable.
 
 {{ render_plots("worstcase_crlf") }}
 
@@ -213,8 +213,8 @@ practically unusable.
 Linux line breaks are not valid in segment headers or boundaries, which benefits
 parsers that do not try to be nice and parse invalid input for compatibility
 reasons. `streaming-form-data` is less affected this time and performs well. The
-two line-based parsers on the other hand are even worse than before. Throughput
-is roughly halved, probably because there are twice as many line-breaks (and thus
+two line-based parsers on the other hand are even worse than before. Throughput is
+roughly halved, probably because there are twice as many line-breaks (and thus
 lines) in this scenario.
 
 {{ render_plots("worstcase_lf") }}
@@ -227,10 +227,10 @@ lines) in this scenario.
 **Description**: A 1MB upload that contains parts of the boundary.
 
 This test was originally added to show an issue with `python-multipart`, but the biggest
-slowdowns were fixed quickly after reporting. It still struggles a bit and is now more
-similar to `werkzeug`, but both are acceptable. `multipart` also slows down a bit
-compared to the non-malicious scenarios, but is still the fastest one of the bunch.
-`streaming-form-data` takes the biggest hit here, it is now even slower than the
+slowdowns were fixed quickly after reporting. It still struggles a bit and is on par
+with `werkzeug` in this test, but both are acceptable. `multipart` also slows down a bit
+compared to the non-malicious scenarios, but is still significantly fatser than the
+others. `streaming-form-data` takes the biggest hit here, it is now even slower than the
 line-based legacy parsers.
 
 {{ render_plots("worstcase_bchar") }}
@@ -242,30 +242,29 @@ line-based legacy parsers.
 
 **Description**: Junk before the first and after the last boundary (1MB each)
 
-The multipart protocol allows arbitrary junk before the first and after the last
-boundary, and requires parsers to ignore it. This protocol 'feature' has no
-practical use and no browser or HTTP client would ever do that, but parsers
+The legacy multipart protocol allows arbitrary junk before the first and after
+the last boundary, and requires parsers to ignore it. This protocol 'feature' has
+no practical use and no browser or HTTP client would ever do that, but parsers
 still have to deal with it, one way or the other.
 
 When this was first discovered, `multipart` was the only implementation not
 showing a drastic slowdown in this test. All the other parsers spent way too
 much time parsing and discarding junk. Some were so slow that I waited for
 the most affected libraries to release fixes before I published any results, as
-this may be abused for denial of service attacks and qualify as a security issue.
-The results are still really bad for most of the parsers, but not as catastrophic
-as a couple of weeks ago. Update your dependencies!
+this may be abused for denial of service attacks, which can be a serious security
+issue. The results are still really bad for most of the parsers, but not as
+catastrophic as it was before. Update your dependencies!
 
-You may have noticed that the blocking `multipart` parser is almost as fast as the
-non-blocking parser in this scenario, while the other scenarios show a way bigger
-difference between blocking and non-blocking variants. This is because 'junk'
-does not emit any parser events and the blocking parts of the parser do not have
-to do much.
+Some of the parsers fail this test, but that's a good thing! Failing this test with a
+fast exception is *way* better than beeing slow. Malicious input can and should be
+rejected. `multipart` will also bail out very quickly in *strict* mode, but these tests
+are run in default mode which accepts some amounts of unusual input for compatibility
+reasons. It's still mostly unaffected, even in non-strict mode, as it manages to skip
+junk fast enough.
 
-**Note:** Failing this test with a fast exception is *way* better than beeing slow.
-Malicious input can and should be rejected. `multipart` will also bail out very quickly
-in *strict* mode, but these tests are run in default mode which accepts some amounts of
-unusual input for compatibility reasons. It's still mostly unaffected, even in non-strict
-mode, as it manages to skip junk fast enough.
+You may have noticed that the blocking variants of most parsers are almost as fast as
+the non-blocking versions in this scenario. This is because 'junk' does not emit any
+parser events and the blocking parts of the parser do not have to do much.
 
 {{ render_plots("worstcase_junk") }}
 
@@ -285,7 +284,7 @@ applications.
 For me, both `streaming-form-data` and `emmett-core` were a bit of a surprise.
 Both are reasonably fast for large file uploads, but not as fast as you might
 expect from parsers written in Cython or Rust. I would have never guessed that a
-pure python parser can outperform both in the upload tests. The overhead
+pure python parser can outperform both in the relevant tests. The overhead
 introduced by those Python/native compatibility layers seems to be significant.
 The results for those two parsers were also very different. Lessons learned:
 Always measure. Just because something is implemented in a faster language does
@@ -298,7 +297,7 @@ Both are unsuitable or even dangerous to use in modern web applications.
 
 All in all, `multipart` seems to be a good choice for new projects. It's highly
 optimized with a strong focus on security, has 100% test coverage, no dependencies
-and does exactly what it is supposed to do, in the best way possible. But don't just
+and does exactly what it is supposed to do, in the best possible way. But don't just
 take my word for it, I'm obviously biased as the author of that library. Look at the
 results, look at the test cases, check out the projects, try them out and make up
 your own mind.
